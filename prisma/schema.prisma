@@ -1,0 +1,117 @@
+// Prisma schema for the gym tracker app.
+//
+// KEY DESIGN DECISIONS (documented per the brief):
+//
+// 1. Templates vs Sessions:
+//    - `WorkoutDay` + `WorkoutExercise` = the PLAN for a given week/day
+//      (e.g. "Week 3, Monday = Shoulders, Shoulder Press planned 3x10").
+//    - `WorkoutSession` + `SessionExercise` = the ACTUAL logged results for
+//      that day. Editing this week's results never touches last week's
+//      WorkoutDay/Session rows, because each week has its own rows.
+//
+// 2. Exercise identity survives renames:
+//    - `Exercise` is its own table with a stable id. WorkoutExercise and
+//      SessionExercise reference exercise.id, not a name string. Renaming
+//      Exercise.name does not break history or progression, since every
+//      historical row still points at the same id.
+//
+// 3. Flexible set/cardio data:
+//    - Rather than a rigid Set table forcing identical structure across
+//      exercise types, planned/actual set data is stored as JSON
+//      (`plannedSets` / `actualSets`). Strength: array of {reps, weightKg,
+//      completed}. Cardio: {timeSec, distanceKm, level, completed}.
+//      This keeps cardio's "not every field is used" requirement simple
+//      while still being queryable at the exercise/session level for
+//      progression and PB calculations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExerciseType {
+  STRENGTH
+  CARDIO
+}
+
+model Exercise {
+  id        String   @id @default(cuid())
+  name      String
+  type      ExerciseType
+  createdAt DateTime @default(now())
+
+  workoutExercises WorkoutExercise[]
+  sessionExercises SessionExercise[]
+}
+
+model Week {
+  id        String   @id @default(cuid())
+  number    Int      @unique
+  createdAt DateTime @default(now())
+
+  days WorkoutDay[]
+}
+
+// dayOfWeek: 0=Mon 1=Tue 2=Wed 3=Thu 4=Fri 5=Sat 6=Sun
+model WorkoutDay {
+  id        String   @id @default(cuid())
+  weekId    String
+  week      Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  name      String   // e.g. "Shoulders", "Rest"
+  createdAt DateTime @default(now())
+
+  exercises WorkoutExercise[]
+  session   WorkoutSession?
+
+  @@unique([weekId, dayOfWeek])
+}
+
+model WorkoutExercise {
+  id           String     @id @default(cuid())
+  workoutDayId String
+  workoutDay   WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise   @relation(fields: [exerciseId], references: [id])
+  order        Int
+  plannedSets  Json
+  notes        String?
+}
+
+model WorkoutSession {
+  id           String     @id @default(cuid())
+  workoutDayId String     @unique
+  workoutDay   WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  completed    Boolean    @default(false)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  durationSec  Int?
+
+  sessionExercises SessionExercise[]
+}
+
+model SessionExercise {
+  id         String         @id @default(cuid())
+  sessionId  String
+  session    WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise       @relation(fields: [exerciseId], references: [id])
+  order      Int
+  actualSets Json
+  notes      String?
+}
+
+model BodyMetric {
+  id           String   @id @default(cuid())
+  date         DateTime @default(now())
+  weightKg     Float?
+  heightCm     Float?
+  bodyFatPct   Float?
+  muscleMassKg Float?
+  age          Int?
+  sex          String?
+}
