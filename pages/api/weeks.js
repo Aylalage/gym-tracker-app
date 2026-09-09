@@ -1,6 +1,6 @@
 // rebuild-trigger
 const prisma = require('../../lib/prisma');
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     const weeks = await prisma.week.findMany({
       orderBy: { number: 'asc' },
@@ -60,4 +60,4 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Allow', ['GET', 'POST']);
   return res.status(405).end();
-};
+}
