@@ -1,6 +1,6 @@
 const prisma = require('../../../../lib/prisma');
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'PUT') {
     res.setHeader('Allow', ['PUT']);
     return res.status(405).end();
@@ -48,4 +48,4 @@ module.exports = async function handler(req, res) {
     include: { sessionExercises: { orderBy: { order: 'asc' }, include: { exercise: true } } },
   });
   return res.status(200).json(updated);
-};
+}
