@@ -1,6 +1,6 @@
 const prisma = require('../../lib/prisma');
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     const metrics = await prisma.bodyMetric.findMany({ orderBy: { date: 'asc' } });
     return res.status(200).json(metrics);
@@ -23,4 +23,4 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Allow', ['GET', 'POST']);
   return res.status(405).end();
-};
+}
