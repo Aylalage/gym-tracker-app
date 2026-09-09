@@ -1,3 +1,4 @@
+// rebuild-trigger
 const prisma = require('../../lib/prisma');
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
