@@ -1,7 +1,4 @@
 const prisma = require('../../lib/prisma');
-
-const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     const weeks = await prisma.week.findMany({
@@ -63,5 +60,3 @@ module.exports = async function handler(req, res) {
   res.setHeader('Allow', ['GET', 'POST']);
   return res.status(405).end();
 };
-
-module.exports.DAY_NAMES = DAY_NAMES;
