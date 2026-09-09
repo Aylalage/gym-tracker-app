@@ -1,6 +1,6 @@
 const prisma = require('../../../lib/prisma');
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { dayId } = req.query;
 
   if (req.method === 'GET') {
@@ -65,4 +65,4 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Allow', ['GET', 'PUT']);
   return res.status(405).end();
-};
+}
