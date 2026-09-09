@@ -1,5 +1,5 @@
 const prisma = require('../../lib/prisma');
-const { DAY_NAMES } = require('./weeks');
+const { DAY_NAMES } = require('../../lib/constants');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
