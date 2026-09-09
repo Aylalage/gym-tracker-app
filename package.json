@@ -1,20 +1,25 @@
 {
   "name": "gym-tracker-app",
   "version": "1.0.0",
-  "description": "FitXR-styled gym workout tracker PWA",
-  "main": "server.js",
+  "private": true,
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
-  "keywords": ["gym", "fitness", "tracker", "pwa"],
-  "author": "",
-  "license": "ISC",
-  "engines": {
-    "node": ">=18"
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start -p $PORT",
+    "postinstall": "prisma generate",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "pg": "^8.11.5"
+    "@prisma/client": "^5.20.0",
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }
