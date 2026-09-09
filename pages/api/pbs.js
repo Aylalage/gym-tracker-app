@@ -1,7 +1,7 @@
 const prisma = require('../../lib/prisma');
 const { computePBs } = require('../../lib/calculations');
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).end();
@@ -26,4 +26,4 @@ module.exports = async function handler(req, res) {
     }));
 
   return res.status(200).json(result);
-};
+}
