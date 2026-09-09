@@ -19,7 +19,7 @@ async function findPrevious(exerciseId, beforeWeekNumber) {
   return rows[0] || null;
 }
 
-module.exports = async function handler(req, res) {
+  export default async function handler(req, res) {
   const { id } = req.query;
 
   if (req.method === 'GET') {
@@ -84,4 +84,4 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Allow', ['GET', 'PUT']);
   return res.status(405).end();
-};
+}
