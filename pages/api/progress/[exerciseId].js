@@ -1,14 +1,19 @@
 const prisma = require('../../../lib/prisma');
 const { strengthVolume, maxWeight, maxReps, computePBs } = require('../../../lib/calculations');
+const { getUserId } = require('../../../lib/auth');
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).end();
   }
 
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   const { exerciseId } = req.query;
   const exercise = await prisma.exercise.findUnique({ where: { id: exerciseId } });
-  if (!exercise) return res.status(404).json({ error: 'not found' });
+  if (!exercise || exercise.userId !== userId) return res.status(404).json({ error: 'not found' });
 
   const rows = await prisma.sessionExercise.findMany({
     where: { exerciseId, session: { completed: true } },

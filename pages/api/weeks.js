@@ -1,8 +1,13 @@
-// rebuild-trigger
 const prisma = require('../../lib/prisma');
+const { getUserId } = require('../../lib/auth');
+
 export default async function handler(req, res) {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   if (req.method === 'GET') {
     const weeks = await prisma.week.findMany({
+      where: { userId },
       orderBy: { number: 'asc' },
       include: {
         days: {
@@ -16,14 +21,15 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { duplicateFromWeekId } = req.body || {};
-    const last = await prisma.week.findFirst({ orderBy: { number: 'desc' } });
+    const last = await prisma.week.findFirst({ where: { userId }, orderBy: { number: 'desc' } });
     const nextNumber = last ? last.number + 1 : 1;
 
-    const week = await prisma.week.create({ data: { number: nextNumber } });
+    const week = await prisma.week.create({ data: { userId, number: nextNumber } });
 
     if (duplicateFromWeekId) {
+      // Only ever copy from a week that actually belongs to this user.
       const sourceDays = await prisma.workoutDay.findMany({
-        where: { weekId: duplicateFromWeekId },
+        where: { weekId: duplicateFromWeekId, week: { userId } },
         include: { exercises: true },
       });
       for (const day of sourceDays) {
@@ -38,6 +44,8 @@ export default async function handler(req, res) {
               order: ex.order,
               plannedSets: ex.plannedSets,
               notes: ex.notes,
+              supersetGroup: ex.supersetGroup,
+              restSeconds: ex.restSeconds,
             },
           });
         }

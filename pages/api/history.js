@@ -1,5 +1,6 @@
 const prisma = require('../../lib/prisma');
 const { DAY_NAMES } = require('../../lib/constants');
+const { getUserId } = require('../../lib/auth');
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -7,8 +8,11 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   const sessions = await prisma.workoutSession.findMany({
-    where: { completed: true },
+    where: { completed: true, workoutDay: { week: { userId } } },
     include: {
       workoutDay: { include: { week: true } },
       sessionExercises: { orderBy: { order: 'asc' }, include: { exercise: true } },
@@ -18,6 +22,7 @@ export default async function handler(req, res) {
 
   const result = sessions.map((s) => ({
     id: s.id,
+    dayId: s.workoutDayId,
     weekNumber: s.workoutDay.week.number,
     dayOfWeek: s.workoutDay.dayOfWeek,
     dayName: DAY_NAMES[s.workoutDay.dayOfWeek],

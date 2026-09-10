@@ -1,7 +1,14 @@
 const prisma = require('../../../lib/prisma');
+const { getUserId } = require('../../../lib/auth');
 
 export default async function handler(req, res) {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   const { dayId } = req.query;
+
+  const owner = await prisma.workoutDay.findUnique({ where: { id: dayId }, include: { week: true } });
+  if (!owner || owner.week.userId !== userId) return res.status(404).json({ error: 'day not found' });
 
   if (req.method === 'GET') {
     let session = await prisma.workoutSession.findUnique({
@@ -25,6 +32,8 @@ export default async function handler(req, res) {
               exerciseId: we.exerciseId,
               order: we.order,
               actualSets: we.plannedSets,
+              supersetGroup: we.supersetGroup,
+              restSeconds: we.restSeconds,
             })),
           },
         },

@@ -1,8 +1,11 @@
 const prisma = require('../../../lib/prisma');
+const { getUserId } = require('../../../lib/auth');
 
 // Find the most recent COMPLETED session-exercise for a given exercise id,
 // looked up by exercise identity (not workout name), from any week that
 // finished before the given week number. Used to prefill / show "previous".
+// exerciseId is always scoped to one user already (Exercise rows aren't
+// shared between profiles), so this naturally never crosses profiles.
 async function findPrevious(exerciseId, beforeWeekNumber) {
   const rows = await prisma.sessionExercise.findMany({
     where: {
@@ -19,8 +22,14 @@ async function findPrevious(exerciseId, beforeWeekNumber) {
   return rows[0] || null;
 }
 
-  export default async function handler(req, res) {
+export default async function handler(req, res) {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   const { id } = req.query;
+
+  const owner = await prisma.workoutDay.findUnique({ where: { id }, include: { week: true } });
+  if (!owner || owner.week.userId !== userId) return res.status(404).json({ error: 'not found' });
 
   if (req.method === 'GET') {
     const day = await prisma.workoutDay.findUnique({
@@ -31,7 +40,6 @@ async function findPrevious(exerciseId, beforeWeekNumber) {
         session: { include: { sessionExercises: { include: { exercise: true } } } },
       },
     });
-    if (!day) return res.status(404).json({ error: 'not found' });
 
     const previous = {};
     for (const we of day.exercises) {
@@ -66,6 +74,8 @@ async function findPrevious(exerciseId, beforeWeekNumber) {
             order: ex.order,
             plannedSets: ex.plannedSets,
             notes: ex.notes || null,
+            supersetGroup: ex.supersetGroup || null,
+            restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : null,
           },
         });
       }

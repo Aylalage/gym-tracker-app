@@ -14,45 +14,41 @@ export default async function handler(req, res) {
   const { targetDayId } = req.body || {};
   if (!targetDayId) return res.status(400).json({ error: 'targetDayId is required' });
 
-  const source = await prisma.workoutDay.findUnique({
+  const source = await prisma.workoutSession.findUnique({
     where: { id },
-    include: { exercises: true, week: true },
+    include: {
+      workoutDay: { include: { week: true } },
+      sessionExercises: true,
+    },
   });
-  if (!source || source.week.userId !== userId) return res.status(404).json({ error: 'source day not found' });
+  if (!source || source.workoutDay.week.userId !== userId) return res.status(404).json({ error: 'source session not found' });
 
   const targetOwner = await prisma.workoutDay.findUnique({ where: { id: targetDayId }, include: { week: true } });
   if (!targetOwner || targetOwner.week.userId !== userId) return res.status(404).json({ error: 'target day not found' });
 
-  await prisma.workoutDay.update({ where: { id: targetDayId }, data: { name: source.name } });
+  await prisma.workoutDay.update({ where: { id: targetDayId }, data: { name: source.workoutDay.name } });
   await prisma.workoutExercise.deleteMany({ where: { workoutDayId: targetDayId } });
-  for (const ex of source.exercises) {
+  for (const se of source.sessionExercises) {
     await prisma.workoutExercise.create({
       data: {
         workoutDayId: targetDayId,
-        exerciseId: ex.exerciseId,
-        order: ex.order,
-        plannedSets: ex.plannedSets,
-        notes: ex.notes,
-        supersetGroup: ex.supersetGroup,
-        restSeconds: ex.restSeconds,
+        exerciseId: se.exerciseId,
+        order: se.order,
+        plannedSets: se.actualSets,
+        notes: se.notes,
+        supersetGroup: se.supersetGroup,
+        restSeconds: se.restSeconds,
       },
     });
   }
 
-  // If the target day was ever opened before, it already has its own
-  // WorkoutSession (created independently of the template on first visit).
-  // That session's exercises were going stale after a duplicate, since only
-  // the template was being replaced above. Clear an in-progress session so
-  // it regenerates fresh from the new template next time it's opened.
-  // A completed session is left untouched so history is never overwritten.
+  // Same rule as duplicating a day: don't overwrite an already-completed
+  // session on the target day, but clear a stale in-progress one so it
+  // regenerates from the freshly-copied template.
   const targetSession = await prisma.workoutSession.findUnique({ where: { workoutDayId: targetDayId } });
   if (targetSession && !targetSession.completed) {
     await prisma.workoutSession.delete({ where: { id: targetSession.id } });
   }
 
-  const target = await prisma.workoutDay.findUnique({
-    where: { id: targetDayId },
-    include: { exercises: { orderBy: { order: 'asc' }, include: { exercise: true } } },
-  });
-  return res.status(200).json(target);
+  return res.status(200).json({ copied: true, targetDayId });
 }

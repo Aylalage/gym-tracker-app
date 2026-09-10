@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import NavBar from '../components/NavBar';
+import LineChart from '../components/LineChart';
 
 export default function ProgressPage() {
   const [exercises, setExercises] = useState([]);
@@ -17,8 +18,6 @@ export default function ProgressPage() {
     fetch(`/api/progress/${selectedId}`).then((r) => r.json()).then(setData);
   }, [selectedId]);
 
-  const maxVolume = data ? Math.max(1, ...data.history.map((h) => h.volume || 0)) : 1;
-
   return (
     <div className="page">
       <h1 className="title">Progress</h1>
@@ -29,59 +28,77 @@ export default function ProgressPage() {
       </select>
 
       {data && (
-        <>
-          <div className="card">
-            <div className="row-workout-name" style={{ marginBottom: 10 }}>{data.exercise.name}</div>
+        <div className="card">
+          <div className="row-workout-name" style={{ marginBottom: 10 }}>{data.exercise.name}</div>
 
-            {data.exercise.type === 'STRENGTH' ? (
-              <>
-                <div className="row">
-                  <div><span className="field-label">Best weight</span>{data.pbs.pbWeight} kg</div>
-                  <div><span className="field-label">Best reps</span>{data.pbs.pbReps}</div>
-                  <div><span className="field-label">Best volume</span>{Math.round(data.pbs.pbVolume)} kg</div>
-                </div>
+          {data.exercise.type === 'STRENGTH' ? (
+            <>
+              <div className="row">
+                <div><span className="field-label">Best weight</span><span className="pb-value">{data.pbs.pbWeight} kg</span></div>
+                <div><span className="field-label">Best reps</span><span className="pb-value">{data.pbs.pbReps}</span></div>
+                <div><span className="field-label">Best volume</span><span className="pb-value">{Math.round(data.pbs.pbVolume)} kg</span></div>
+              </div>
 
-                <div className="section-title" style={{ fontSize: 15, marginTop: 18 }}>Volume by week</div>
-                <div className="chart-row">
-                  {data.history.map((h) => (
-                    <div className="chart-bar-wrap" key={h.weekNumber}>
-                      <div
-                        className={`chart-bar ${h.volume >= data.pbs.pbVolume ? 'pb' : ''}`}
-                        style={{ height: `${Math.max(4, (h.volume / maxVolume) * 100)}%` }}
-                      />
-                      <div className="chart-label">W{h.weekNumber}</div>
-                    </div>
-                  ))}
-                </div>
+              {data.history.length > 0 && (
+                <>
+                  <div className="section-title" style={{ fontSize: 15, marginTop: 18 }}>Best weight by week</div>
+                  <LineChart
+                    points={data.history.map((h) => ({ label: `W${h.weekNumber}`, value: h.maxWeight }))}
+                    unit="kg"
+                  />
 
-                <div className="section-title" style={{ fontSize: 15 }}>History</div>
-                {data.history.slice().reverse().map((h) => (
-                  <div className="row" key={h.weekNumber} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div className="section-title" style={{ fontSize: 15, marginTop: 18 }}>Volume by week</div>
+                  <LineChart
+                    points={data.history.map((h) => ({ label: `W${h.weekNumber}`, value: Math.round(h.volume) }))}
+                  />
+                </>
+              )}
+
+              <div className="section-title" style={{ fontSize: 15 }}>History</div>
+              {data.history.slice().reverse().map((h) => {
+                const isBest = h.maxWeight === data.pbs.pbWeight || h.volume === data.pbs.pbVolume;
+                return (
+                  <div className={`row history-row ${isBest ? 'pb' : ''}`} key={h.weekNumber} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
                     <div>Week {h.weekNumber}</div>
                     <div>{h.maxWeight}kg × {h.maxReps} · vol {Math.round(h.volume)}</div>
                   </div>
-                ))}
-              </>
-            ) : (
-              <>
-                <div className="row">
-                  <div><span className="field-label">Longest time</span>{Math.round(data.pbs.pbDuration / 60)} min</div>
-                  <div><span className="field-label">Longest distance</span>{data.pbs.pbDistance} km</div>
-                  <div><span className="field-label">Top level</span>{data.pbs.pbLevel}</div>
-                </div>
-                <div className="section-title" style={{ fontSize: 15 }}>History</div>
-                {data.history.slice().reverse().map((h) => (
-                  <div className="row" key={h.weekNumber} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                    <div>Week {h.weekNumber}</div>
-                    <div>{h.actualSets?.timeSec ? Math.round(h.actualSets.timeSec / 60) + ' min' : ''} {h.actualSets?.distanceKm ? '· ' + h.actualSets.distanceKm + ' km' : ''}</div>
-                  </div>
-                ))}
-              </>
-            )}
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <div className="row">
+                <div><span className="field-label">Longest time</span><span className="pb-value">{Math.round(data.pbs.pbDuration / 60)} min</span></div>
+                <div><span className="field-label">Longest distance</span><span className="pb-value">{data.pbs.pbDistance} km</span></div>
+                <div><span className="field-label">Top level</span><span className="pb-value">{data.pbs.pbLevel}</span></div>
+              </div>
 
-            {data.history.length === 0 && <p className="empty-state">No completed sessions for this exercise yet.</p>}
-          </div>
-        </>
+              {data.history.length > 0 && (
+                <>
+                  <div className="section-title" style={{ fontSize: 15, marginTop: 18 }}>Distance by week</div>
+                  <LineChart
+                    points={data.history.map((h) => ({ label: `W${h.weekNumber}`, value: h.actualSets?.distanceKm || 0 }))}
+                    unit="km"
+                  />
+                </>
+              )}
+
+              <div className="section-title" style={{ fontSize: 15 }}>History</div>
+              {data.history.slice().reverse().map((h) => {
+                const c = h.actualSets || {};
+                const isBest = c.timeSec === data.pbs.pbDuration || c.distanceKm === data.pbs.pbDistance;
+                return (
+                  <div className={`row history-row ${isBest ? 'pb' : ''}`} key={h.weekNumber} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div>Week {h.weekNumber}</div>
+                    <div>{c.timeSec ? Math.round(c.timeSec / 60) + ' min' : ''} {c.distanceKm ? '· ' + c.distanceKm + ' km' : ''}</div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {data.history.length === 0 && <p className="empty-state">No completed sessions for this exercise yet.</p>}
+        </div>
       )}
 
       <div className="section-title">Personal Bests</div>
@@ -91,15 +108,15 @@ export default function ProgressPage() {
           <div className="row-workout-name">{p.name}</div>
           {p.type === 'STRENGTH' ? (
             <div className="row" style={{ marginTop: 6 }}>
-              <span className="pill">{p.pbs.pbWeight} kg</span>
-              <span className="pill">{p.pbs.pbReps} reps</span>
-              <span className="pill">{Math.round(p.pbs.pbVolume)} vol</span>
+              <span className="pill pb">{p.pbs.pbWeight} kg</span>
+              <span className="pill pb">{p.pbs.pbReps} reps</span>
+              <span className="pill pb">{Math.round(p.pbs.pbVolume)} vol</span>
             </div>
           ) : (
             <div className="row" style={{ marginTop: 6 }}>
-              <span className="pill">{Math.round(p.pbs.pbDuration / 60)} min</span>
-              <span className="pill">{p.pbs.pbDistance} km</span>
-              <span className="pill">Lvl {p.pbs.pbLevel}</span>
+              <span className="pill pb">{Math.round(p.pbs.pbDuration / 60)} min</span>
+              <span className="pill pb">{p.pbs.pbDistance} km</span>
+              <span className="pill pb">Lvl {p.pbs.pbLevel}</span>
             </div>
           )}
         </div>

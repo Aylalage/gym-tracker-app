@@ -4,12 +4,15 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding demo data…');
 
-  const shoulderPress = await prisma.exercise.create({ data: { name: 'Shoulder Press', type: 'STRENGTH' } });
-  const squat = await prisma.exercise.create({ data: { name: 'Squat', type: 'STRENGTH' } });
-  const treadmill = await prisma.exercise.create({ data: { name: 'Treadmill', type: 'CARDIO' } });
+  const user = await prisma.user.create({ data: { name: 'Demo' } });
+  const userId = user.id;
+
+  const shoulderPress = await prisma.exercise.create({ data: { userId, name: 'Shoulder Press', type: 'STRENGTH' } });
+  const squat = await prisma.exercise.create({ data: { userId, name: 'Squat', type: 'STRENGTH' } });
+  const treadmill = await prisma.exercise.create({ data: { userId, name: 'Treadmill', type: 'CARDIO' } });
 
   // Week 1 — fully completed, gives Week 2 something to compare against.
-  const week1 = await prisma.week.create({ data: { number: 1 } });
+  const week1 = await prisma.week.create({ data: { userId, number: 1 } });
   const dayNames1 = ['Shoulders', 'Legs', 'Rest', 'Cardio', 'Rest', 'Rest', 'Rest'];
   const week1Days = [];
   for (let d = 0; d < 7; d++) {
@@ -27,7 +30,7 @@ async function main() {
     data: { workoutDayId: week1Days[3].id, exerciseId: treadmill.id, order: 0, plannedSets: { timeSec: 1200, distanceKm: 3.2, level: 5 } },
   });
 
-  const s1 = await prisma.workoutSession.create({
+  await prisma.workoutSession.create({
     data: {
       workoutDayId: week1Days[0].id,
       completed: true,
@@ -64,7 +67,7 @@ async function main() {
   // Week 2 — set up as the "current" in-progress week, structure copied,
   // no completed sessions yet, so opening Week 2 Shoulders shows Week 1's
   // "previous performance" hint.
-  const week2 = await prisma.week.create({ data: { number: 2 } });
+  const week2 = await prisma.week.create({ data: { userId, number: 2 } });
   for (let d = 0; d < 7; d++) {
     const day = await prisma.workoutDay.create({ data: { weekId: week2.id, dayOfWeek: d, name: dayNames1[d] } });
     if (d === 0) {
@@ -80,13 +83,17 @@ async function main() {
   }
 
   await prisma.bodyMetric.create({
-    data: { weightKg: 72, heightCm: 175, bodyFatPct: 18, muscleMassKg: 34, age: 30, sex: 'female', date: new Date(Date.now() - 20 * 24 * 3600 * 1000) },
+    data: { userId, weightKg: 72, heightCm: 175, bodyFatPct: 18, muscleMassKg: 34, age: 30, sex: 'female', date: new Date(Date.now() - 20 * 24 * 3600 * 1000) },
   });
   await prisma.bodyMetric.create({
-    data: { weightKg: 71.2, heightCm: 175, bodyFatPct: 17.5, muscleMassKg: 34.4, age: 30, sex: 'female' },
+    data: { userId, weightKg: 71.2, heightCm: 175, bodyFatPct: 17.5, muscleMassKg: 34.4, age: 30, sex: 'female' },
   });
 
-  console.log('Seed complete.');
+  await prisma.programSettings.create({
+    data: { userId, startDate: week1.createdAt },
+  });
+
+  console.log('Seed complete. Demo profile name: "Demo" (no PIN).');
 }
 
 main()

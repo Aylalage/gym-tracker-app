@@ -1,4 +1,5 @@
 const prisma = require('../../../../lib/prisma');
+const { getUserId } = require('../../../../lib/auth');
 
 export default async function handler(req, res) {
   if (req.method !== 'PUT') {
@@ -6,8 +7,15 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: 'not logged in' });
+
   const { dayId } = req.query;
-  // body.exercises: [{ exerciseId, order, actualSets, notes }]
+
+  const owner = await prisma.workoutDay.findUnique({ where: { id: dayId }, include: { week: true } });
+  if (!owner || owner.week.userId !== userId) return res.status(404).json({ error: 'day not found' });
+
+  // body.exercises: [{ exerciseId, order, actualSets, notes, supersetGroup, restSeconds }]
   const { exercises } = req.body || {};
   if (!Array.isArray(exercises)) return res.status(400).json({ error: 'exercises array required' });
 
@@ -24,6 +32,8 @@ export default async function handler(req, res) {
         order: ex.order,
         actualSets: ex.actualSets,
         notes: ex.notes || null,
+        supersetGroup: ex.supersetGroup || null,
+        restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : null,
       },
     });
   }
@@ -39,6 +49,8 @@ export default async function handler(req, res) {
         order: ex.order,
         plannedSets: ex.actualSets,
         notes: ex.notes || null,
+        supersetGroup: ex.supersetGroup || null,
+        restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : null,
       },
     });
   }

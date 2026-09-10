@@ -20,9 +20,15 @@
 //      exercise types, planned/actual set data is stored as JSON
 //      (`plannedSets` / `actualSets`). Strength: array of {reps, weightKg,
 //      completed}. Cardio: {timeSec, distanceKm, level, completed}.
-//      This keeps cardio's "not every field is used" requirement simple
-//      while still being queryable at the exercise/session level for
-//      progression and PB calculations.
+//
+// 4. Multi-profile support:
+//    - `User` is a lightweight named profile, not a full account system —
+//      no email required, an optional short PIN only. `Week`, `Exercise`,
+//      `BodyMetric`, and `ProgramSettings` each belong to a User, so two
+//      people sharing the same deployment never see each other's data.
+//      `WorkoutDay`/`WorkoutExercise`/`WorkoutSession`/`SessionExercise`
+//      don't need their own userId — they're only reachable through a Week
+//      or Exercise that's already scoped to one user.
 
 generator client {
   provider = "prisma-client-js"
@@ -38,22 +44,42 @@ enum ExerciseType {
   CARDIO
 }
 
-model Exercise {
+model User {
   id        String   @id @default(cuid())
   name      String
-  type      ExerciseType
+  pinHash   String?
   createdAt DateTime @default(now())
+
+  weeks       Week[]
+  exercises   Exercise[]
+  bodyMetrics BodyMetric[]
+  settings    ProgramSettings?
+}
+
+model Exercise {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      ExerciseType
+  createdAt DateTime     @default(now())
 
   workoutExercises WorkoutExercise[]
   sessionExercises SessionExercise[]
+
+  @@unique([userId, name, type])
 }
 
 model Week {
   id        String   @id @default(cuid())
-  number    Int      @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  number    Int
   createdAt DateTime @default(now())
 
   days WorkoutDay[]
+
+  @@unique([userId, number])
 }
 
 // dayOfWeek: 0=Mon 1=Tue 2=Wed 3=Thu 4=Fri 5=Sat 6=Sun
@@ -72,14 +98,16 @@ model WorkoutDay {
 }
 
 model WorkoutExercise {
-  id           String     @id @default(cuid())
-  workoutDayId String
-  workoutDay   WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
-  exerciseId   String
-  exercise     Exercise   @relation(fields: [exerciseId], references: [id])
-  order        Int
-  plannedSets  Json
-  notes        String?
+  id            String     @id @default(cuid())
+  workoutDayId  String
+  workoutDay    WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exerciseId    String
+  exercise      Exercise   @relation(fields: [exerciseId], references: [id])
+  order         Int
+  plannedSets   Json
+  notes         String?
+  supersetGroup String? // shared value across exercises grouped into one superset
+  restSeconds   Int? // rest timer duration; null = no timer for this exercise
 }
 
 model WorkoutSession {
@@ -95,18 +123,31 @@ model WorkoutSession {
 }
 
 model SessionExercise {
-  id         String         @id @default(cuid())
-  sessionId  String
-  session    WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  exerciseId String
-  exercise   Exercise       @relation(fields: [exerciseId], references: [id])
-  order      Int
-  actualSets Json
-  notes      String?
+  id            String         @id @default(cuid())
+  sessionId     String
+  session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId    String
+  exercise      Exercise       @relation(fields: [exerciseId], references: [id])
+  order         Int
+  actualSets    Json
+  notes         String?
+  supersetGroup String?
+  restSeconds   Int?
+}
+
+// One row per user. Stores the real calendar date their Week 1 / Day 1
+// began, so "today" can be mapped onto a week number + day of week.
+model ProgramSettings {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate DateTime
 }
 
 model BodyMetric {
   id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date         DateTime @default(now())
   weightKg     Float?
   heightCm     Float?
