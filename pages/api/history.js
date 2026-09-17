@@ -30,10 +30,13 @@ export default async function handler(req, res) {
     completedAt: s.completedAt,
     durationSec: s.durationSec,
     exercises: s.sessionExercises.map((se) => ({
+      exerciseId: se.exerciseId,
       name: se.exercise.name,
       type: se.exercise.type,
       actualSets: se.actualSets,
       notes: se.notes,
+      supersetGroup: se.supersetGroup,
+      restSeconds: se.restSeconds,
     })),
   }));
 

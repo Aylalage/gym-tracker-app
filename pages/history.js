@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import NavBar from '../components/NavBar';
+import Calendar from '../components/Calendar';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -26,6 +27,10 @@ function getTodayPosition(startDate) {
   return { weekNumber: Math.floor(diffDays / 7) + 1, dayOfWeek: diffDays % 7 };
 }
 
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export default function HistoryPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState([]);
@@ -35,6 +40,13 @@ export default function HistoryPage() {
   const [defaultTodayDayId, setDefaultTodayDayId] = useState('');
   const [performTarget, setPerformTarget] = useState(null); // sessionId currently picking a target for
   const [performDayId, setPerformDayId] = useState('');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const cardRefs = useRef({});
 
   async function load() {
     const [sessRes, weeksRes, settingsRes] = await Promise.all([
@@ -63,6 +75,14 @@ export default function HistoryPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    function handleOutsideClick(e) {
+      if (!e.target.closest('.exercise-menu-wrap')) setMenuId(null);
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
   async function deleteSession(sessionId) {
     setMenuId(null);
     if (!confirm('Delete this workout from your history? This cannot be undone.')) return;
@@ -87,14 +107,62 @@ export default function HistoryPage() {
     router.push(`/day/${performDayId}`);
   }
 
+  async function saveAsTemplate(session) {
+    setMenuId(null);
+    const name = prompt('Name this template (e.g. "Push Day"):', session.workoutName);
+    if (!name || !name.trim()) return;
+    await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        exercises: session.exercises.map((ex, i) => ({
+          exerciseId: ex.exerciseId,
+          order: i,
+          plannedSets: ex.actualSets,
+          notes: ex.notes,
+          supersetGroup: ex.supersetGroup,
+          restSeconds: ex.restSeconds,
+        })),
+      }),
+    });
+    alert(`Saved as template "${name.trim()}".`);
+  }
+
+  function hasEntryOnDate(date) {
+    return sessions.some((s) => s.completedAt && sameDay(new Date(s.completedAt), date));
+  }
+
+  function jumpToDate(date) {
+    const match = sessions.find((s) => s.completedAt && sameDay(new Date(s.completedAt), date));
+    if (!match) return;
+    setShowCalendar(false);
+    setOpenId(match.id);
+    setTimeout(() => cardRefs.current[match.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+  }
+
   return (
     <div className="page">
-      <h1 className="title">History</h1>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <h1 className="title" style={{ marginBottom: 0 }}>History</h1>
+        <button className="btn btn-ghost btn-sm" onClick={() => setShowCalendar((s) => !s)}>
+          📅 Calendar
+        </button>
+      </div>
+
+      {showCalendar && (
+        <Calendar
+          month={calendarMonth}
+          onMonthChange={setCalendarMonth}
+          hasEntry={hasEntryOnDate}
+          onSelectDate={jumpToDate}
+        />
+      )}
 
       {sessions.length === 0 && <p className="empty-state">No completed workouts yet.</p>}
 
       {sessions.map((s) => (
-        <div className="card" key={s.id}>
+        <div className="card" key={s.id} ref={(el) => (cardRefs.current[s.id] = el)}>
           <div className="row tappable" onClick={() => setOpenId(openId === s.id ? null : s.id)}>
             <div>
               <div className="row-day-name">Week {s.weekNumber} · {s.dayName}</div>
@@ -112,6 +180,8 @@ export default function HistoryPage() {
                 {menuId === s.id && (
                   <div className="exercise-menu">
                     <button onClick={() => router.push(`/day/${s.dayId}`)}>✏️ Edit Workout</button>
+                    <hr />
+                    <button onClick={() => saveAsTemplate(s)}>💾 Save as Template</button>
                     <hr />
                     <button onClick={() => openPerformAgain(s.id)}>↩ Perform Again</button>
                     <hr />

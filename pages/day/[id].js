@@ -74,6 +74,8 @@ export default function DayEditor() {
   const [supersetPartnerId, setSupersetPartnerId] = useState('');
   const [restRemaining, setRestRemaining] = useState(null);
   const [restLabel, setRestLabel] = useState('');
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   const saveTimeout = useRef(null);
   const timerInterval = useRef(null);
@@ -81,11 +83,12 @@ export default function DayEditor() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [dayRes, sessionRes, catalogRes, weeksRes] = await Promise.all([
+    const [dayRes, sessionRes, catalogRes, weeksRes, templatesRes] = await Promise.all([
       fetch(`/api/days/${id}`),
       fetch(`/api/sessions/${id}`),
       fetch('/api/exercises'),
       fetch('/api/weeks'),
+      fetch('/api/templates'),
     ]);
     const dayData = await dayRes.json();
     const sessionData = await sessionRes.json();
@@ -93,6 +96,7 @@ export default function DayEditor() {
     setNameDraft(dayData.name);
     setSession(sessionData);
     setCatalog(await catalogRes.json());
+    setTemplates(await templatesRes.json());
     const weeks = await weeksRes.json();
     const flat = [];
     weeks.forEach((w) =>
@@ -104,6 +108,14 @@ export default function DayEditor() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    function handleOutsideClick(e) {
+      if (!e.target.closest('.exercise-menu-wrap')) setOpenMenu(null);
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     if (timerRunning) {
@@ -198,7 +210,8 @@ export default function DayEditor() {
 
   function addSet(index) {
     const se = session.sessionExercises[index];
-    const sets = [...se.actualSets, { reps: null, weightKg: null, completed: false }];
+    const last = se.actualSets[se.actualSets.length - 1];
+    const sets = [...se.actualSets, { reps: last?.reps ?? null, weightKg: last?.weightKg ?? null, completed: false }];
     const next = session.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: sets } : s));
     saveStructure(next);
   }
@@ -220,15 +233,74 @@ export default function DayEditor() {
     const se = session.sessionExercises[index];
     const set = se.actualSets[setIdx];
     const nextCompleted = !set.completed;
-    updateSet(index, setIdx, { completed: nextCompleted });
+    const sets = se.actualSets.map((s, i) => (i === setIdx ? { ...s, completed: nextCompleted } : s));
+    const nextList = session.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: sets } : s));
+    scheduleFieldSave({ ...session, sessionExercises: nextList });
     if (nextCompleted && se.restSeconds) startRest(se.restSeconds, se.exercise.name);
+    autoCompleteIfDone(nextList);
   }
 
   function toggleCardioComplete(index) {
     const se = session.sessionExercises[index];
     const nextCompleted = !se.actualSets?.completed;
-    updateExercise(index, { actualSets: { ...se.actualSets, completed: nextCompleted } });
+    const nextList = session.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: { ...s.actualSets, completed: nextCompleted } } : s));
+    scheduleFieldSave({ ...session, sessionExercises: nextList });
     if (nextCompleted && se.restSeconds) startRest(se.restSeconds, se.exercise.name);
+    autoCompleteIfDone(nextList);
+  }
+
+  function isAllComplete(list) {
+    if (!list.length) return false;
+    return list.every((se) =>
+      se.exercise.type === 'STRENGTH'
+        ? se.actualSets.length > 0 && se.actualSets.every((s) => s.completed)
+        : !!se.actualSets?.completed
+    );
+  }
+
+  async function autoCompleteIfDone(nextList) {
+    if (session.completed) return;
+    if (!isAllComplete(nextList)) return;
+    await fetch(`/api/sessions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: true, durationSec: timerSec || undefined }),
+    });
+    setTimerRunning(false);
+    setSession((s) => ({ ...s, completed: true }));
+  }
+
+  async function saveAsTemplate() {
+    const name = prompt('Name this template (e.g. "Push Day"):');
+    if (!name || !name.trim()) return;
+    await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        exercises: session.sessionExercises.map((se, i) => ({
+          exerciseId: se.exerciseId,
+          order: i,
+          plannedSets: se.actualSets,
+          notes: se.notes,
+          supersetGroup: se.supersetGroup,
+          restSeconds: se.restSeconds,
+        })),
+      }),
+    });
+    alert(`Saved as template "${name.trim()}".`);
+    load();
+  }
+
+  async function applyTemplate() {
+    if (!selectedTemplateId) return;
+    await fetch(`/api/templates/${selectedTemplateId}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetDayId: id }),
+    });
+    setSelectedTemplateId('');
+    load();
   }
 
   function moveExercise(index, dir) {
@@ -368,6 +440,22 @@ export default function DayEditor() {
   }
 
   async function markComplete() {
+    const allDone = session.sessionExercises.map((se) => ({
+      exerciseId: se.exerciseId,
+      order: se.order,
+      notes: se.notes,
+      supersetGroup: se.supersetGroup,
+      restSeconds: se.restSeconds,
+      actualSets:
+        se.exercise.type === 'STRENGTH'
+          ? se.actualSets.map((s) => ({ ...s, completed: true }))
+          : { ...se.actualSets, completed: true },
+    }));
+    await fetch(`/api/sessions/${id}/exercises`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exercises: allDone }),
+    });
     await fetch(`/api/sessions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -623,6 +711,21 @@ export default function DayEditor() {
       ) : (
         <button className="btn btn-ghost btn-block" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
       )}
+
+      <div className="section-title">Apply a template</div>
+      <div className="card">
+        <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)} style={{ marginBottom: 8 }}>
+          <option value="">Choose a template…</option>
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <button className="btn btn-ghost btn-block" onClick={applyTemplate} disabled={!selectedTemplateId}>
+          Apply to this day
+        </button>
+      </div>
+
+      <button className="btn btn-ghost btn-block" style={{ marginBottom: 12 }} onClick={saveAsTemplate}>
+        💾 Save this workout as a template
+      </button>
 
       <div className="section-title">Duplicate this workout</div>
       <div className="card">

@@ -54,6 +54,7 @@ model User {
   exercises   Exercise[]
   bodyMetrics BodyMetric[]
   settings    ProgramSettings?
+  templates   Template[]
 }
 
 model Exercise {
@@ -66,6 +67,7 @@ model Exercise {
 
   workoutExercises WorkoutExercise[]
   sessionExercises SessionExercise[]
+  templateExercises TemplateExercise[]
 
   @@unique([userId, name, type])
 }
@@ -142,6 +144,33 @@ model ProgramSettings {
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   startDate DateTime
+}
+
+// A reusable, named exercise list independent of any specific week/day —
+// e.g. "Push Day". Applying one to a day copies its exercises in, the same
+// way duplicating a day does. Every new profile gets a starter Push/Pull/Legs
+// set of these automatically.
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  exercises TemplateExercise[]
+}
+
+model TemplateExercise {
+  id            String   @id @default(cuid())
+  templateId    String
+  template      Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId    String
+  exercise      Exercise @relation(fields: [exerciseId], references: [id])
+  order         Int
+  plannedSets   Json
+  notes         String?
+  supersetGroup String?
+  restSeconds   Int?
 }
 
 model BodyMetric {
