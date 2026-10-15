@@ -80,6 +80,8 @@ export default function DayEditor() {
   const [pageMenuMode, setPageMenuMode] = useState('main');
 
   const saveTimeout = useRef(null);
+  const sessionRef = useRef(null);
+  sessionRef.current = session;
   const timerInterval = useRef(null);
   const restInterval = useRef(null);
 
@@ -165,6 +167,7 @@ export default function DayEditor() {
   }
 
   function scheduleFieldSave(nextSession) {
+    sessionRef.current = nextSession; // newest state is available instantly, even before React re-renders
     setSession(nextSession);
     setSaveState('saving');
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -210,7 +213,8 @@ export default function DayEditor() {
   }
 
   function updateExercise(index, patch) {
-    const next = { ...session, sessionExercises: session.sessionExercises.map((se, i) => (i === index ? { ...se, ...patch } : se)) };
+    const cur = sessionRef.current;
+    const next = { ...cur, sessionExercises: cur.sessionExercises.map((se, i) => (i === index ? { ...se, ...patch } : se)) };
     scheduleFieldSave(next);
   }
 
@@ -230,27 +234,30 @@ export default function DayEditor() {
   }
 
   function updateSet(index, setIdx, patch) {
-    const se = session.sessionExercises[index];
+    const se = sessionRef.current.sessionExercises[index];
     const sets = se.actualSets.map((s, i) => (i === setIdx ? { ...s, ...patch } : s));
     updateExercise(index, { actualSets: sets });
   }
 
   function toggleSetComplete(index, setIdx) {
-    const se = session.sessionExercises[index];
+    const cur = sessionRef.current;
+    const se = cur.sessionExercises[index];
     const set = se.actualSets[setIdx];
+    if (!set) return;
     const nextCompleted = !set.completed;
     const sets = se.actualSets.map((s, i) => (i === setIdx ? { ...s, completed: nextCompleted } : s));
-    const nextList = session.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: sets } : s));
-    scheduleFieldSave({ ...session, sessionExercises: nextList });
+    const nextList = cur.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: sets } : s));
+    scheduleFieldSave({ ...cur, sessionExercises: nextList });
     if (nextCompleted && se.restSeconds) startRest(se.restSeconds, se.exercise.name);
     autoCompleteIfDone(nextList);
   }
 
   function toggleCardioComplete(index) {
-    const se = session.sessionExercises[index];
+    const cur = sessionRef.current;
+    const se = cur.sessionExercises[index];
     const nextCompleted = !se.actualSets?.completed;
-    const nextList = session.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: { ...s.actualSets, completed: nextCompleted } } : s));
-    scheduleFieldSave({ ...session, sessionExercises: nextList });
+    const nextList = cur.sessionExercises.map((s, i) => (i === index ? { ...s, actualSets: { ...s.actualSets, completed: nextCompleted } } : s));
+    scheduleFieldSave({ ...cur, sessionExercises: nextList });
     if (nextCompleted && se.restSeconds) startRest(se.restSeconds, se.exercise.name);
     autoCompleteIfDone(nextList);
   }
@@ -651,9 +658,12 @@ export default function DayEditor() {
                     onChange={(e) => updateSet(index, si, { weightKg: e.target.value === '' ? null : Number(e.target.value) })}
                   />
                   <button
+                    type="button"
                     className={`set-check-btn ${set.completed ? 'checked' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => toggleSetComplete(index, si)}
                     title="Mark set complete"
+                    aria-pressed={!!set.completed}
                   >
                     ✓
                   </button>

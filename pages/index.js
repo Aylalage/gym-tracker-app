@@ -25,6 +25,8 @@ export default function ProgramPage() {
   const [settings, setSettings] = useState(undefined); // undefined = not loaded yet, null = not set
   const [startDateInput, setStartDateInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planWeeks, setPlanWeeks] = useState(12);
   const [dayMenuId, setDayMenuId] = useState(null);
   const [dayMenuMode, setDayMenuMode] = useState('main');
   const [myGoal, setMyGoal] = useState(null);
@@ -92,6 +94,31 @@ export default function ProgramPage() {
       body: JSON.stringify(duplicateFromWeekId ? { duplicateFromWeekId } : {}),
     });
     await loadWeeks(true);
+    setBusy(false);
+  }
+
+  // Multi-week plan: copy the current week forward so the plan is `total`
+  // weeks long in total, counting the week you're copying from as week 1 of it.
+  async function createPlan(sourceWeek, total) {
+    const copies = total - 1;
+    const lastNumber = weeks.length ? weeks[weeks.length - 1].number : sourceWeek.number;
+    if (copies < 1) return;
+    const firstNew = lastNumber + 1;
+    const lastNew = lastNumber + copies;
+    if (!confirm(`Add ${copies} new weeks (Week ${firstNew} to Week ${lastNew}), each copied from Week ${sourceWeek.number} with all ticks cleared?`)) return;
+    setPlanOpen(false);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/weeks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duplicateFromWeekId: sourceWeek.id, count: copies }),
+      });
+      if (!res.ok) alert('Sorry, that plan could not be created. Nothing was changed.');
+    } catch {
+      alert('Sorry, that plan could not be created. Check your connection and try again.');
+    }
+    await loadWeeks(false); // stay on the week you're looking at
     setBusy(false);
   }
 
@@ -167,6 +194,7 @@ export default function ProgramPage() {
                 <button onClick={() => createWeek(null)} disabled={busy}>+ New blank week</button>
                 <hr />
                 <button onClick={() => createWeek(week.id)} disabled={busy}>⧉ Duplicate this week</button>
+                <button onClick={() => { setMenuOpen(false); setPlanOpen(true); }} disabled={busy}>🗓 Create multi-week plan…</button>
                 <hr />
                 {settings && <button onClick={jumpToToday}>📅 Jump to Today</button>}
                 <hr />
@@ -176,6 +204,41 @@ export default function ProgramPage() {
           </div>
         )}
       </div>
+
+      {planOpen && week && (
+        <div className="setup-banner" style={{ marginBottom: 16 }}>
+          <span className="field-label">Repeat Week {week.number} as a plan</span>
+          <p style={{ margin: '4px 0 8px', fontSize: 13, color: 'var(--muted)' }}>
+            Copies this week forward, counting it as week 1 of the plan. You can still swap any day afterwards.
+          </p>
+          <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+            {[6, 8, 12].map((n) => (
+              <button
+                key={n}
+                className={`btn btn-sm ${planWeeks === n ? 'btn-lime' : 'btn-ghost'}`}
+                onClick={() => setPlanWeeks(n)}
+              >
+                {n} weeks
+              </button>
+            ))}
+            <input
+              type="number"
+              min="2"
+              max="52"
+              value={planWeeks}
+              onChange={(e) => setPlanWeeks(Math.min(52, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+              style={{ width: 70 }}
+              aria-label="Number of weeks"
+            />
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn btn-lime btn-sm" disabled={busy || planWeeks < 2} onClick={() => createPlan(week, planWeeks)}>
+              Create {planWeeks >= 2 ? planWeeks : '–'}-week plan
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       <button className="btn btn-lime btn-block" style={{ marginBottom: myGoal ? 8 : 16 }} onClick={() => router.push('/template-library')}>
         📚 Use Template

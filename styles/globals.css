@@ -158,10 +158,10 @@ input:focus, select:focus, textarea:focus {
 
 .set-row {
   display: grid;
-  grid-template-columns: 28px 1fr 1fr 24px;
+  grid-template-columns: 28px 1fr 1fr 44px;
   gap: 8px;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 .set-row .set-num { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
 .set-row input { padding: 8px 10px; font-size: 14px; }
@@ -288,8 +288,9 @@ input:focus, select:focus, textarea:focus {
 .rest-badge { background: #eef1f5; color: var(--muted); font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
 
 .set-check-btn {
-  width: 30px; height: 30px; border-radius: 50%; border: 2px solid #d8dade; background: #fff;
-  cursor: pointer; font-size: 14px; color: transparent; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%; border: 2px solid #d8dade; background: #fff;
+  cursor: pointer; font-size: 16px; color: transparent; display: flex; align-items: center; justify-content: center;
+  justify-self: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .set-check-btn.checked { background: var(--lime); border-color: var(--lime); color: var(--lime-ink); }
 
