@@ -63,7 +63,6 @@ export default function DayEditor() {
   const [newExType, setNewExType] = useState('STRENGTH');
   const [catalog, setCatalog] = useState([]);
   const [allDays, setAllDays] = useState([]);
-  const [duplicateTarget, setDuplicateTarget] = useState('');
   const [timerSec, setTimerSec] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
@@ -72,10 +71,13 @@ export default function DayEditor() {
   const [replaceType, setReplaceType] = useState('STRENGTH');
   const [supersetPickerIndex, setSupersetPickerIndex] = useState(null);
   const [supersetPartnerId, setSupersetPartnerId] = useState('');
+  const [mergePickerIndex, setMergePickerIndex] = useState(null);
+  const [mergeTargetId, setMergeTargetId] = useState('');
   const [restRemaining, setRestRemaining] = useState(null);
   const [restLabel, setRestLabel] = useState('');
   const [templates, setTemplates] = useState([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [pageMenuOpen, setPageMenuOpen] = useState(false);
+  const [pageMenuMode, setPageMenuMode] = useState('main');
 
   const saveTimeout = useRef(null);
   const timerInterval = useRef(null);
@@ -111,7 +113,11 @@ export default function DayEditor() {
 
   useEffect(() => {
     function handleOutsideClick(e) {
-      if (!e.target.closest('.exercise-menu-wrap')) setOpenMenu(null);
+      if (!e.target.closest('.exercise-menu-wrap')) {
+        setOpenMenu(null);
+        setPageMenuOpen(false);
+        setPageMenuMode('main');
+      }
     }
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
@@ -271,6 +277,7 @@ export default function DayEditor() {
   }
 
   async function saveAsTemplate() {
+    setPageMenuOpen(false);
     const name = prompt('Name this template (e.g. "Push Day"):');
     if (!name || !name.trim()) return;
     await fetch('/api/templates', {
@@ -292,14 +299,14 @@ export default function DayEditor() {
     load();
   }
 
-  async function applyTemplate() {
-    if (!selectedTemplateId) return;
-    await fetch(`/api/templates/${selectedTemplateId}/apply`, {
+  async function applyTemplate(templateId) {
+    setPageMenuOpen(false);
+    setPageMenuMode('main');
+    await fetch(`/api/templates/${templateId}/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetDayId: id }),
     });
-    setSelectedTemplateId('');
     load();
   }
 
@@ -332,17 +339,38 @@ export default function DayEditor() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newExName.trim(), type: newExType }),
     });
+    const recognized = res.status === 200; // 200 = matched an existing exercise, 201 = brand new
     const exercise = await res.json();
+
+    let actualSets = exercise.type === 'STRENGTH' ? emptyStrengthSets() : emptyCardio();
+    let previousEntry = null;
+
+    if (recognized) {
+      const progressRes = await fetch(`/api/progress/${exercise.id}`);
+      const progressData = await progressRes.json();
+      const last = progressData.history?.[progressData.history.length - 1];
+      if (last) {
+        previousEntry = { actualSets: last.actualSets, weekNumber: last.weekNumber, completedAt: last.completedAt };
+        actualSets =
+          exercise.type === 'STRENGTH'
+            ? last.actualSets.map((s) => ({ reps: s.reps, weightKg: s.weightKg, completed: false }))
+            : { ...last.actualSets, completed: false };
+      }
+    }
+
     const newEntry = {
       exerciseId: exercise.id,
       exercise,
-      actualSets: exercise.type === 'STRENGTH' ? emptyStrengthSets() : emptyCardio(),
+      actualSets,
       notes: '',
       supersetGroup: null,
       restSeconds: null,
     };
     const arr = [...session.sessionExercises, newEntry];
     await saveStructure(arr);
+    if (previousEntry) {
+      setDay((d) => ({ ...d, previous: { ...d.previous, [exercise.id]: previousEntry } }));
+    }
     setNewExName('');
     setShowAdd(false);
   }
@@ -400,6 +428,24 @@ export default function DayEditor() {
     );
     await saveStructure(arr);
     setReplacingIndex(null);
+  }
+
+  function startMergePicker(index) {
+    setOpenMenu(null);
+    setMergePickerIndex(index);
+    setMergeTargetId('');
+  }
+
+  async function confirmMerge(exerciseId) {
+    if (!mergeTargetId) return;
+    if (!confirm('Merge these two exercises into one? All history from both will be combined, and the duplicate will be removed. This cannot be undone.')) return;
+    await fetch(`/api/exercises/${exerciseId}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intoExerciseId: mergeTargetId }),
+    });
+    setMergePickerIndex(null);
+    load();
   }
 
   function startSupersetPicker(index) {
@@ -465,12 +511,13 @@ export default function DayEditor() {
     load();
   }
 
-  async function duplicateHere() {
-    if (!duplicateTarget) return;
+  async function duplicateHere(targetDayId) {
+    setPageMenuOpen(false);
+    setPageMenuMode('main');
     await fetch(`/api/days/${id}/duplicate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetDayId: duplicateTarget }),
+      body: JSON.stringify({ targetDayId }),
     });
     alert('Duplicated into selected day.');
   }
@@ -511,6 +558,8 @@ export default function DayEditor() {
                   <button onClick={() => startSupersetPicker(index)}>Create Superset</button>
                 )}
                 <hr />
+                <button onClick={() => startMergePicker(index)}>🔗 Merge with existing exercise</button>
+                <hr />
                 <button className="danger" onClick={() => removeExercise(index)}>✕ Remove Exercise</button>
               </div>
             )}
@@ -533,6 +582,24 @@ export default function DayEditor() {
             <div className="top-actions">
               <button className="btn btn-lime btn-sm" onClick={confirmReplace}>Replace</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setReplacingIndex(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {mergePickerIndex === index && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <span className="field-label">Same exercise as which other one? (combines all history)</span>
+            <select value={mergeTargetId} onChange={(e) => setMergeTargetId(e.target.value)} style={{ margin: '8px 0' }}>
+              <option value="">Choose…</option>
+              {catalog
+                .filter((c) => c.id !== se.exerciseId && c.type === se.exercise.type)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+            </select>
+            <div className="top-actions">
+              <button className="btn btn-lime btn-sm" onClick={() => confirmMerge(se.exerciseId)} disabled={!mergeTargetId}>Merge</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setMergePickerIndex(null)}>Cancel</button>
             </div>
           </div>
         )}
@@ -564,10 +631,10 @@ export default function DayEditor() {
         {se.exercise.type === 'STRENGTH' ? (
           <>
             {se.actualSets.map((set, si) => {
-              const prevBest = prev && Array.isArray(prev.actualSets)
-                ? Math.max(0, ...prev.actualSets.map((s) => s.weightKg || 0))
-                : 0;
-              const isPB = (set.weightKg || 0) > prevBest && prevBest > 0;
+              const hasPrev = prev && Array.isArray(prev.actualSets) && prev.actualSets.length > 0;
+              const prevBestWeight = hasPrev ? Math.max(0, ...prev.actualSets.map((s) => s.weightKg || 0)) : 0;
+              const prevBestReps = hasPrev ? Math.max(0, ...prev.actualSets.map((s) => s.reps || 0)) : 0;
+              const isPB = hasPrev && ((set.weightKg || 0) > prevBestWeight || (set.reps || 0) > prevBestReps);
               return (
                 <div className={`set-row ${isPB ? 'pb' : ''}`} key={si}>
                   <div className="set-num">{si + 1}</div>
@@ -660,7 +727,60 @@ export default function DayEditor() {
 
       <div className="row" style={{ marginBottom: 4 }}>
         <div className="row-day-name">{DAY_NAMES[day.dayOfWeek]} · Week {day.week.number}</div>
-        {session.completed && <span className="pill done">Done</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {session.completed && <span className="pill done">Done</span>}
+          <div className="exercise-menu-wrap">
+            <button
+              className="exercise-menu-btn"
+              onClick={() => {
+                if (pageMenuOpen) {
+                  setPageMenuOpen(false);
+                } else {
+                  setPageMenuOpen(true);
+                  setPageMenuMode('main');
+                }
+              }}
+            >
+              ⋮
+            </button>
+            {pageMenuOpen && pageMenuMode === 'main' && (
+              <div className="exercise-menu">
+                <button onClick={saveAsTemplate}>💾 Save as Template</button>
+                <hr />
+                <button onClick={() => setPageMenuMode('apply-template')}>📋 Apply a Template</button>
+                <hr />
+                <button onClick={() => setPageMenuMode('duplicate')}>⧉ Duplicate this workout</button>
+              </div>
+            )}
+            {pageMenuOpen && pageMenuMode === 'apply-template' && (
+              <div className="exercise-menu" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <button onClick={() => setPageMenuMode('main')}>‹ Back</button>
+                <hr />
+                {templates.length === 0 && (
+                  <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--muted)' }}>No templates saved yet.</div>
+                )}
+                {templates.map((t, i) => (
+                  <div key={t.id}>
+                    <button onClick={() => applyTemplate(t.id)}>{t.name}</button>
+                    {i < templates.length - 1 && <hr />}
+                  </div>
+                ))}
+              </div>
+            )}
+            {pageMenuOpen && pageMenuMode === 'duplicate' && (
+              <div className="exercise-menu" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <button onClick={() => setPageMenuMode('main')}>‹ Back</button>
+                <hr />
+                {allDays.map((d, i) => (
+                  <div key={d.id}>
+                    <button onClick={() => duplicateHere(d.id)}>{d.label}</button>
+                    {i < allDays.length - 1 && <hr />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
       <input
         className="exercise-name-input"
@@ -711,32 +831,6 @@ export default function DayEditor() {
       ) : (
         <button className="btn btn-ghost btn-block" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
       )}
-
-      <div className="section-title">Apply a template</div>
-      <div className="card">
-        <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)} style={{ marginBottom: 8 }}>
-          <option value="">Choose a template…</option>
-          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-        <button className="btn btn-ghost btn-block" onClick={applyTemplate} disabled={!selectedTemplateId}>
-          Apply to this day
-        </button>
-      </div>
-
-      <button className="btn btn-ghost btn-block" style={{ marginBottom: 12 }} onClick={saveAsTemplate}>
-        💾 Save this workout as a template
-      </button>
-
-      <div className="section-title">Duplicate this workout</div>
-      <div className="card">
-        <select value={duplicateTarget} onChange={(e) => setDuplicateTarget(e.target.value)} style={{ marginBottom: 8 }}>
-          <option value="">Choose a day…</option>
-          {allDays.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-        <button className="btn btn-ghost btn-block" onClick={duplicateHere} disabled={!duplicateTarget}>
-          Copy this workout there
-        </button>
-      </div>
 
       {!session.completed && (
         <button className="btn btn-lime btn-block" style={{ marginTop: 16 }} onClick={markComplete}>

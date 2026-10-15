@@ -20,5 +20,5 @@ export default async function handler(req, res) {
   }
 
   setUserCookie(res, user.id);
-  return res.status(200).json({ id: user.id, name: user.name });
+  return res.status(200).json({ id: user.id, name: user.name, role: user.role });
 }

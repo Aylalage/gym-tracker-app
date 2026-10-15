@@ -48,7 +48,24 @@ model User {
   id        String   @id @default(cuid())
   name      String
   pinHash   String?
+  role      String   @default("user") // "user" | "admin" — first profile created becomes admin
   createdAt DateTime @default(now())
+
+  // Onboarding / goal profile (Phase 2). onboardingCompleted defaults to
+  // true so it never retroactively interrupts profiles that already
+  // existed before this was added — it's explicitly set to false only when
+  // a brand-new profile is created going forward.
+  onboardingCompleted  Boolean   @default(true)
+  primaryGoalId        String?
+  primaryGoal          GoalCategory? @relation(fields: [primaryGoalId], references: [id])
+  goalDescription      String?
+  experienceLevel      String? // "Beginner" | "Intermediate" | "Advanced"
+  trainingDaysPerWeek  Int?
+  preferredTrainingType String? // "Strength" | "Cardio" | "Mixture"
+  equipmentAvailable   String?
+  bodyAreaPriorities   String?
+  exerciseRestrictions String?
+  aiSupportEnabled     Boolean   @default(false)
 
   weeks       Week[]
   exercises   Exercise[]
@@ -171,6 +188,67 @@ model TemplateExercise {
   notes         String?
   supersetGroup String?
   restSeconds   Int?
+}
+
+// Extensible list of goal categories (Build Muscle, Lose Weight, etc).
+// Admin-managed so new goals can be added without a code change.
+model GoalCategory {
+  id    String @id @default(cuid())
+  key   String @unique // stable machine key, e.g. "build_muscle"
+  label String // display label, e.g. "Build Muscle / Strength"
+  order Int    @default(0)
+
+  masterTemplates MasterTemplate[]
+  users           User[]
+}
+
+// An admin-authored, owner-controlled program template. Deliberately has no
+// link to any User — it stores plain exercise names/sets/reps, not
+// references into anyone's personal Exercise catalog. "Using" a template
+// (see /api/master-templates/[id]/use) reads this data and creates normal,
+// fully independent Week/WorkoutDay/WorkoutExercise rows for the copying
+// user — after that there is no relationship back to the master template,
+// so admin edits here never affect anyone who already copied it.
+model MasterTemplate {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  goalId            String?
+  goal              GoalCategory? @relation(fields: [goalId], references: [id])
+  difficulty        String? // "Beginner" | "Intermediate" | "Advanced"
+  daysPerWeek       Int
+  recommendedWeeks  Int?
+  published         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  days MasterTemplateDay[]
+}
+
+// dayOfWeek: 0=Mon .. 6=Sun — only the weekdays actually used need a row.
+model MasterTemplateDay {
+  id           String         @id @default(cuid())
+  templateId   String
+  template     MasterTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int
+  workoutName  String
+
+  exercises MasterTemplateExercise[]
+}
+
+model MasterTemplateExercise {
+  id           String            @id @default(cuid())
+  templateDayId String
+  templateDay  MasterTemplateDay @relation(fields: [templateDayId], references: [id], onDelete: Cascade)
+  order        Int
+  name         String
+  type         ExerciseType
+  sets         Int
+  reps         Int?
+  repRangeMin  Int?
+  repRangeMax  Int?
+  notes        String?
+  restSeconds  Int?
 }
 
 model BodyMetric {

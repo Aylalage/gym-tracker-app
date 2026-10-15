@@ -29,6 +29,12 @@ export default function NavBar() {
       {me && (
         <div style={{ position: 'fixed', top: 14, left: 16, fontSize: 13, fontWeight: 700, color: 'var(--muted)', zIndex: 20 }}>
           {me.name} · <button className="link-btn" onClick={switchProfile} style={{ fontSize: 13 }}>Switch</button>
+          {me.role === 'admin' && (
+            <>
+              {' · '}
+              <Link href="/admin/templates" className="link-btn" style={{ fontSize: 13 }}>Admin</Link>
+            </>
+          )}
         </div>
       )}
       <nav className="navbar">

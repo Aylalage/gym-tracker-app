@@ -1,5 +1,6 @@
 const prisma = require('../../../../lib/prisma');
 const { getUserId } = require('../../../../lib/auth');
+const { stripCompleted } = require('../../../../lib/calculations');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -31,7 +32,7 @@ export default async function handler(req, res) {
         workoutDayId: targetDayId,
         exerciseId: ex.exerciseId,
         order: ex.order,
-        plannedSets: ex.plannedSets,
+        plannedSets: stripCompleted(ex.plannedSets),
         notes: ex.notes,
         supersetGroup: ex.supersetGroup,
         restSeconds: ex.restSeconds,

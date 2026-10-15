@@ -10,6 +10,15 @@ next to today's entry, and track personal bests and progression over time.
 - **Database**: PostgreSQL
 - **ORM**: Prisma
 
+## Owner template library (Phase 1 of the AI/template roadmap)
+
+- The **first profile ever created** on a deployment automatically becomes an **admin**. Admins get an "Admin" link (top-left, next to your name) leading to a template management area.
+- Admins create/edit/publish/unpublish/duplicate/delete **master templates** — these are entirely separate from any user's own program. A master template stores plain exercise names/sets/reps, not a link to anyone's data.
+- Regular users see a **"📚 Use Template"** button at the top of the Program page, leading to a library of only the *published* templates, filterable by goal. Choosing one copies it into a brand-new week in that user's own Program — after copying, it's a completely normal, independently editable program with no link back to the master template.
+- Goal categories (Build Muscle, Lose Weight, etc.) live in their own table and auto-seed on first use, so more can be added later via the admin goals API without a code change.
+
+This is Phase 1 of a larger planned roadmap (goal-based onboarding, an in-app Claude assistant, and voice-based workout logging) — those are separate, larger builds still to come.
+
 ## Product decisions worth knowing about
 
 - **Templates vs sessions**: Each week/day has a *template* (the planned

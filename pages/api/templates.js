@@ -1,5 +1,6 @@
 const prisma = require('../../lib/prisma');
 const { getUserId } = require('../../lib/auth');
+const { stripCompleted } = require('../../lib/calculations');
 
 export default async function handler(req, res) {
   const userId = getUserId(req);
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
           create: exercises.map((ex, i) => ({
             exerciseId: ex.exerciseId,
             order: i,
-            plannedSets: ex.plannedSets,
+            plannedSets: stripCompleted(ex.plannedSets),
             notes: ex.notes || null,
             supersetGroup: ex.supersetGroup || null,
             restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : null,

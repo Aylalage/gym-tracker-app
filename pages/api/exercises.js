@@ -13,13 +13,19 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { name, type } = req.body || {};
     if (!name || !type) return res.status(400).json({ error: 'name and type are required' });
+    const trimmed = name.trim();
 
     // Reuse an existing exercise with the same name+type rather than creating
     // a duplicate identity, so history stays merged for repeated names.
-    const existing = await prisma.exercise.findFirst({ where: { userId, name, type } });
+    // Matching is case/whitespace-insensitive ("Cable Lat Raise" ==
+    // "cable lat raise") so small typing differences don't fragment history —
+    // whichever name was typed first is kept as the display name.
+    const existing = await prisma.exercise.findFirst({
+      where: { userId, type, name: { equals: trimmed, mode: 'insensitive' } },
+    });
     if (existing) return res.status(200).json(existing);
 
-    const exercise = await prisma.exercise.create({ data: { userId, name, type } });
+    const exercise = await prisma.exercise.create({ data: { userId, name: trimmed, type } });
     return res.status(201).json(exercise);
   }
 

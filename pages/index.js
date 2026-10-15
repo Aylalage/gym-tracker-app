@@ -26,6 +26,8 @@ export default function ProgramPage() {
   const [startDateInput, setStartDateInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [dayMenuId, setDayMenuId] = useState(null);
+  const [dayMenuMode, setDayMenuMode] = useState('main');
+  const [myGoal, setMyGoal] = useState(null);
   const autoJumped = useRef(false);
 
   async function loadWeeks(selectLast = false) {
@@ -49,6 +51,11 @@ export default function ProgramPage() {
   useEffect(() => {
     loadWeeks();
     loadSettings();
+    fetch('/api/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p) => {
+        if (p?.primaryGoal) setMyGoal(p.primaryGoal);
+      });
   }, []);
 
   // Auto-jump to today's week the first time the app opens (once both
@@ -69,6 +76,7 @@ export default function ProgramPage() {
       if (!e.target.closest('.exercise-menu-wrap')) {
         setMenuOpen(false);
         setDayMenuId(null);
+        setDayMenuMode('main');
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
@@ -120,12 +128,23 @@ export default function ProgramPage() {
 
   async function swapDays(dayAId, dayBId) {
     setDayMenuId(null);
+    setDayMenuMode('main');
     setBusy(true);
     await fetch('/api/days/swap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dayAId, dayBId }),
     });
+    await loadWeeks();
+    setBusy(false);
+  }
+
+  async function deleteWorkoutDay(dayId, dayName) {
+    setDayMenuId(null);
+    setDayMenuMode('main');
+    if (!confirm(`Delete the "${dayName}" workout? It'll go back to a blank Rest day, and any logged results for it are removed.`)) return;
+    setBusy(true);
+    await fetch(`/api/days/${dayId}/clear`, { method: 'POST' });
     await loadWeeks();
     setBusy(false);
   }
@@ -157,6 +176,19 @@ export default function ProgramPage() {
           </div>
         )}
       </div>
+
+      <button className="btn btn-lime btn-block" style={{ marginBottom: myGoal ? 8 : 16 }} onClick={() => router.push('/template-library')}>
+        📚 Use Template
+      </button>
+      {myGoal && (
+        <button
+          className="btn btn-ghost btn-block"
+          style={{ marginBottom: 16 }}
+          onClick={() => router.push(`/template-library?goal=${myGoal.key}`)}
+        >
+          ⭐ Recommended For You — {myGoal.label}
+        </button>
+      )}
 
       {!settings && (
         <div className="setup-banner">
@@ -222,13 +254,30 @@ export default function ProgramPage() {
                       <div className="exercise-menu-wrap" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="exercise-menu-btn"
-                          onClick={() => setDayMenuId(dayMenuId === day.id ? null : day.id)}
-                          title="Move this workout to a different day"
+                          onClick={() => {
+                            if (dayMenuId === day.id) {
+                              setDayMenuId(null);
+                            } else {
+                              setDayMenuId(day.id);
+                              setDayMenuMode('main');
+                            }
+                          }}
                         >
-                          ⇄
+                          ⋮
                         </button>
-                        {dayMenuId === day.id && (
+                        {dayMenuId === day.id && dayMenuMode === 'main' && (
                           <div className="exercise-menu">
+                            <button className="danger" onClick={() => deleteWorkoutDay(day.id, day.name)} disabled={busy}>
+                              🗑 Delete Workout
+                            </button>
+                            <hr />
+                            <button onClick={() => setDayMenuMode('swap')}>⇄ Swap Day</button>
+                          </div>
+                        )}
+                        {dayMenuId === day.id && dayMenuMode === 'swap' && (
+                          <div className="exercise-menu">
+                            <button onClick={() => setDayMenuMode('main')}>‹ Back</button>
+                            <hr />
                             <div style={{ padding: '10px 14px 4px', fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
                               Swap with…
                             </div>

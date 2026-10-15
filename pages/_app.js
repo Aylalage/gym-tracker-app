@@ -12,9 +12,14 @@ export default function App({ Component, pageProps }) {
       return;
     }
     let cancelled = false;
-    fetch('/api/auth/me').then((res) => {
+    fetch('/api/auth/me').then(async (res) => {
       if (cancelled) return;
       if (res.ok) {
+        const me = await res.json();
+        if (!me.onboardingCompleted && router.pathname !== '/onboarding') {
+          router.replace('/onboarding');
+          return;
+        }
         setStatus('authed');
       } else {
         setStatus('guest');
@@ -27,7 +32,7 @@ export default function App({ Component, pageProps }) {
   }, [router, router.pathname]);
 
   if (router.pathname === '/login') return <Component {...pageProps} />;
-  if (status !== 'authed') return null;
+  if (status !== 'authed' && router.pathname !== '/onboarding') return null;
 
   return <Component {...pageProps} />;
 }

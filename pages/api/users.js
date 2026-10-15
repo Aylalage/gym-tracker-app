@@ -66,9 +66,11 @@ export default async function handler(req, res) {
     if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
 
     const pinHash = pin && pin.trim() ? await bcrypt.hash(pin.trim(), 10) : null;
-    const user = await prisma.user.create({ data: { name: name.trim(), pinHash } });
+    const existingCount = await prisma.user.count();
+    const role = existingCount === 0 ? 'admin' : 'user';
+    const user = await prisma.user.create({ data: { name: name.trim(), pinHash, role, onboardingCompleted: false } });
     await seedStarterTemplates(user.id);
-    return res.status(201).json({ id: user.id, name: user.name, hasPin: !!user.pinHash });
+    return res.status(201).json({ id: user.id, name: user.name, hasPin: !!user.pinHash, role: user.role });
   }
 
   res.setHeader('Allow', ['GET', 'POST']);
