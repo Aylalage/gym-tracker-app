@@ -355,7 +355,7 @@ export default function DayEditor() {
     if (recognized) {
       const progressRes = await fetch(`/api/progress/${exercise.id}`);
       const progressData = await progressRes.json();
-      const last = progressData.history?.[progressData.history.length - 1];
+      const last = progressData.latest || progressData.history?.[progressData.history.length - 1];
       if (last) {
         previousEntry = { actualSets: last.actualSets, weekNumber: last.weekNumber, completedAt: last.completedAt };
         actualSets =

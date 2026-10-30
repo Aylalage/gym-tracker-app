@@ -1,6 +1,7 @@
 const prisma = require('../../../../lib/prisma');
 const { getUserId } = require('../../../../lib/auth');
 const { stripCompleted } = require('../../../../lib/calculations');
+const { latestPerformedMap } = require('../../../../lib/latest');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -24,6 +25,13 @@ export default async function handler(req, res) {
   const targetOwner = await prisma.workoutDay.findUnique({ where: { id: targetDayId }, include: { week: true } });
   if (!targetOwner || targetOwner.week.userId !== userId) return res.status(404).json({ error: 'target day not found' });
 
+  const latest = await latestPerformedMap(prisma, userId, source.exercises.map((e) => e.exerciseId));
+  const setsFor = (ex) => {
+    const l = latest[ex.exerciseId];
+    if (l && Array.isArray(l.actualSets) === Array.isArray(ex.plannedSets)) return stripCompleted(l.actualSets);
+    return stripCompleted(ex.plannedSets);
+  };
+
   await prisma.workoutDay.update({ where: { id: targetDayId }, data: { name: source.name } });
   await prisma.workoutExercise.deleteMany({ where: { workoutDayId: targetDayId } });
   for (const ex of source.exercises) {
@@ -32,7 +40,7 @@ export default async function handler(req, res) {
         workoutDayId: targetDayId,
         exerciseId: ex.exerciseId,
         order: ex.order,
-        plannedSets: stripCompleted(ex.plannedSets),
+        plannedSets: setsFor(ex),
         notes: ex.notes,
         supersetGroup: ex.supersetGroup,
         restSeconds: ex.restSeconds,

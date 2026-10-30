@@ -1,6 +1,7 @@
 const prisma = require('../../lib/prisma');
 const { getUserId } = require('../../lib/auth');
 const { stripCompleted } = require('../../lib/calculations');
+const { latestPerformedMap } = require('../../lib/latest');
 
 export default async function handler(req, res) {
   const userId = getUserId(req);
@@ -40,6 +41,24 @@ export default async function handler(req, res) {
       if (sourceDays.length === 0) return res.status(404).json({ error: 'week not found' });
     }
 
+    // For every exercise being copied, find the most recent numbers you
+    // actually logged anywhere in the program, so the copy never goes back to
+    // an older week's weights. Falls back to the source week's plan for
+    // exercises you've never logged.
+    let latest = {};
+    if (sourceDays) {
+      latest = await latestPerformedMap(
+        prisma,
+        userId,
+        sourceDays.flatMap((d) => d.exercises.map((e) => e.exerciseId))
+      );
+    }
+    const setsFor = (ex) => {
+      const l = latest[ex.exerciseId];
+      if (l && Array.isArray(l.actualSets) === Array.isArray(ex.plannedSets)) return stripCompleted(l.actualSets);
+      return stripCompleted(ex.plannedSets);
+    };
+
     const createdIds = [];
     for (let n = 0; n < count; n++) {
       const data = { userId, number: nextNumber++ };
@@ -55,7 +74,7 @@ export default async function handler(req, res) {
               create: day.exercises.map((ex) => ({
                 exerciseId: ex.exerciseId,
                 order: ex.order,
-                plannedSets: stripCompleted(ex.plannedSets),
+                plannedSets: setsFor(ex),
                 notes: ex.notes,
                 supersetGroup: ex.supersetGroup,
                 restSeconds: ex.restSeconds,

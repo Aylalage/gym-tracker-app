@@ -152,6 +152,9 @@ model SessionExercise {
   notes         String?
   supersetGroup String?
   restSeconds   Int?
+  // Set whenever the user edits/saves this exercise in a session. Lets the
+  // app tell real edits apart from sets that were just auto-copied in.
+  touchedAt     DateTime?
 }
 
 // One row per user. Stores the real calendar date their Week 1 / Day 1

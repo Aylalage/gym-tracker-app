@@ -1,6 +1,7 @@
 const prisma = require('../../../lib/prisma');
 const { strengthVolume, maxWeight, maxReps, computePBs } = require('../../../lib/calculations');
 const { getUserId } = require('../../../lib/auth');
+const { latestPerformedMap } = require('../../../lib/latest');
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
   const rows = await prisma.sessionExercise.findMany({
     where: { exerciseId, session: { completed: true } },
     include: { session: { include: { workoutDay: { include: { week: true } } } } },
-    orderBy: { session: { workoutDay: { week: { number: 'asc' } } } },
+    orderBy: [{ session: { workoutDay: { week: { number: 'asc' } } } }, { session: { workoutDay: { dayOfWeek: 'asc' } } }],
   });
 
   const history = rows.map((r) => ({
@@ -36,5 +37,10 @@ export default async function handler(req, res) {
 
   const pbs = computePBs(exercise.type, rows.map((r) => ({ actualSets: r.actualSets })));
 
-  return res.status(200).json({ exercise, history, pbs });
+  const latestMap = await latestPerformedMap(prisma, userId, [exerciseId]);
+  const latest = latestMap[exerciseId]
+    ? { actualSets: latestMap[exerciseId].actualSets, weekNumber: latestMap[exerciseId].weekNumber, completedAt: latestMap[exerciseId].completedAt }
+    : null;
+
+  return res.status(200).json({ exercise, history, pbs, latest });
 }

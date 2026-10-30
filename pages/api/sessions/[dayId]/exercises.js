@@ -35,6 +35,7 @@ export default async function handler(req, res) {
         notes: ex.notes || null,
         supersetGroup: ex.supersetGroup || null,
         restSeconds: typeof ex.restSeconds === 'number' ? ex.restSeconds : null,
+        touchedAt: new Date(),
       },
     });
   }

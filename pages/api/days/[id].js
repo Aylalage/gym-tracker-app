@@ -1,5 +1,6 @@
 const prisma = require('../../../lib/prisma');
 const { getUserId } = require('../../../lib/auth');
+const { latestPerformedMap, positionOf } = require('../../../lib/latest');
 
 // Find the most recent COMPLETED session-exercise for a given exercise id,
 // looked up by exercise identity (not workout name), from any week that
@@ -41,14 +42,20 @@ export default async function handler(req, res) {
       },
     });
 
+    const latest = await latestPerformedMap(
+      prisma,
+      userId,
+      day.exercises.map((we) => we.exerciseId),
+      positionOf(day.week.number, day.dayOfWeek)
+    );
     const previous = {};
     for (const we of day.exercises) {
-      const prev = await findPrevious(we.exerciseId, day.week.number);
+      const prev = latest[we.exerciseId];
       if (prev) {
         previous[we.exerciseId] = {
           actualSets: prev.actualSets,
-          weekNumber: prev.session.workoutDay.week.number,
-          completedAt: prev.session.completedAt,
+          weekNumber: prev.weekNumber,
+          completedAt: prev.completedAt,
         };
       }
     }

@@ -1,6 +1,7 @@
 const prisma = require('../../../lib/prisma');
 const { getUserId } = require('../../../lib/auth');
 const { stripCompleted } = require('../../../lib/calculations');
+const { latestPerformedMap, positionOf } = require('../../../lib/latest');
 
 export default async function handler(req, res) {
   const userId = getUserId(req);
@@ -24,6 +25,23 @@ export default async function handler(req, res) {
       });
       if (!day) return res.status(404).json({ error: 'day not found' });
 
+      // Start from the plan, but for any exercise you've done before, use the
+      // most recent numbers you actually logged (sets, reps and weight), with
+      // ticks cleared. Only looks at sessions earlier in the program than
+      // this day, so it never picks up its own future.
+      const latest = await latestPerformedMap(
+        prisma,
+        userId,
+        day.exercises.map((we) => we.exerciseId),
+        positionOf(owner.week.number, owner.dayOfWeek)
+      );
+      const seedFor = (we) => {
+        const l = latest[we.exerciseId];
+        const planIsArray = Array.isArray(we.plannedSets);
+        if (l && Array.isArray(l.actualSets) === planIsArray) return stripCompleted(l.actualSets);
+        return stripCompleted(we.plannedSets);
+      };
+
       session = await prisma.workoutSession.create({
         data: {
           workoutDayId: dayId,
@@ -32,7 +50,7 @@ export default async function handler(req, res) {
             create: day.exercises.map((we) => ({
               exerciseId: we.exerciseId,
               order: we.order,
-              actualSets: stripCompleted(we.plannedSets),
+              actualSets: seedFor(we),
               supersetGroup: we.supersetGroup,
               restSeconds: we.restSeconds,
             })),
@@ -53,7 +71,7 @@ export default async function handler(req, res) {
       for (const se of sessionExercises) {
         await prisma.sessionExercise.update({
           where: { id: se.id },
-          data: { actualSets: se.actualSets, notes: se.notes || null },
+          data: { actualSets: se.actualSets, notes: se.notes || null, touchedAt: new Date() },
         });
       }
     }
