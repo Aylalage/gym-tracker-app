@@ -26,17 +26,21 @@ export default function NavBar() {
 
   return (
     <>
-      {me && (
-        <div style={{ position: 'fixed', top: 'calc(10px + env(safe-area-inset-top))', left: 16, fontSize: 13, fontWeight: 700, color: 'var(--muted)', zIndex: 20 }}>
-          {me.name} · <button className="link-btn" onClick={switchProfile} style={{ fontSize: 13 }}>Switch</button>
-          {me.role === 'admin' && (
-            <>
-              {' · '}
-              <Link href="/admin/templates" className="link-btn" style={{ fontSize: 13 }}>Admin</Link>
-            </>
-          )}
-        </div>
-      )}
+      <header className="topbar">
+        {me && (
+          <>
+            <span className="who">{me.name}</span>
+            <span>·</span>
+            <button className="link-btn" onClick={switchProfile}>Switch</button>
+            {me.role === 'admin' && (
+              <>
+                <span>·</span>
+                <Link href="/admin/templates" className="link-btn">Admin</Link>
+              </>
+            )}
+          </>
+        )}
+      </header>
       <nav className="navbar">
         {ITEMS.map((item) => {
           const active = router.pathname === item.href;

@@ -1,4 +1,7 @@
 :root {
+  /* Space reserved above all content for the iPhone status bar (at least 54px even if the phone reports none) */
+  --top-inset: max(54px, env(safe-area-inset-top));
+  --topbar-h: 44px;
   --bg: #f4f4f5;
   --card: #ffffff;
   --ink: #0b0c0e;
@@ -35,7 +38,7 @@ a { color: inherit; text-decoration: none; }
 .page {
   flex: 1;
   /* Leave room for the iPhone status bar / notch on top and the home bar + tab bar below */
-  padding: calc(40px + env(safe-area-inset-top)) 16px calc(110px + env(safe-area-inset-bottom));
+  padding: calc(var(--top-inset) + var(--topbar-h) + 14px) 16px max(130px, calc(110px + env(safe-area-inset-bottom)));
   max-width: 720px;
   margin: 0 auto;
   width: 100%;
@@ -191,6 +194,18 @@ input:focus, select:focus, textarea:focus {
 .cardio-grid .full { grid-column: 1 / -1; }
 .field-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; margin-bottom: 3px; display: block; }
 
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  height: calc(var(--top-inset) + var(--topbar-h));
+  padding: var(--top-inset) 16px 0;
+  background: var(--bg);
+  border-bottom: 1px solid #e4e5e8;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: var(--muted);
+}
+.topbar .who { color: var(--ink); }
+.topbar .link-btn { font-size: 14px; }
+
 .navbar {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -211,7 +226,7 @@ input:focus, select:focus, textarea:focus {
 .section-title { font-weight: 800; font-size: 20px; margin: 22px 0 10px; }
 
 .saving-tag {
-  position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 14px;
+  position: fixed; top: calc(var(--top-inset) + 8px); right: 14px;
   background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; font-weight: 700;
   padding: 6px 12px; border-radius: 999px; z-index: 30;
 }
